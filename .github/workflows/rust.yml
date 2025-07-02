@@ -75,48 +75,47 @@ jobs:
 # —————————————————— 2️⃣  Release —————————————————— #
   release:
     name: Tag & Release
-    needs: build                # 等 build 所有矩阵都成功
+    needs: build
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
 
     steps:
-      # 把源代码拉下来（仅为推 tag）
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0        # 必须取全历史以便打 tag
+          fetch-depth: 0                # 必须取完整历史才能打 tag
 
-      # 下载全部产物（download-artifact 会自动展开到子目录）
+      # 1) 下载所有产物
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      # 取得日期，输出到 GITHUB_OUTPUT 供后续步骤引用
+      # 2) 生成 vYYYY-MM-DD
       - name: Set release date
         id: date
         run: |
-          echo "RELEASE_DATE=$(%Y-%m-%d')" >>"$GITHUB_OUTPUT"
+          echo "RELEASE_DATE=$(date -u +'%Y-%m-%d')" >>"$GITHUB_OUTPUT"
 
-      # 创建并推送 tag
+      # 3) 创建并推送 tag
       - name: Create & push tag
         env:
-          TAG_NAME: v-${{ steps.date.outputs.RELEASE_DATE }}
+          TAG_NAME: v${{ steps.date.outputs.RELEASE_DATE }}   # 没有连字符
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name  "github-actions[bot]"
           git tag "${TAG_NAME}"
           git push origin "${TAG_NAME}"
 
-      # 创建 Release 并上传全部压缩包
+      # 4) 建 Release 并上传全部产物
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v-${{ steps.date.outputs.RELEASE_DATE }}
-          name: Release v-${{ steps.date.outputs.RELEASE_DATE }}
+          tag_name: v${{ steps.date.outputs.RELEASE_DATE }}
+          name: Release v${{ steps.date.outputs.RELEASE_DATE }}
           body: |
             **自动发布**  
             - 基于 commit `${{ github.sha }}`  
-            - 生成时间（Tokyo）：${{ steps.date.outputs.RELEASE_DATE }}
+            - 生成时间 (UTC)：${{ steps.date.outputs.RELEASE_DATE }}
           files: artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
