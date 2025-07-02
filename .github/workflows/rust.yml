@@ -22,9 +22,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x86_64
-          - os: windows-latest          # Win32（需额外 ORT）
-            target: i686-pc-windows-msvc
-            artifact_name: windows-i686
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact_name: windows-aarch64
@@ -32,9 +29,6 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: linux-x86_64
-          - os: ubuntu-latest          # 32-bit，需 32-bit OpenSSL
-            target: i686-unknown-linux-gnu
-            artifact_name: linux-i686
           # —— macOS —— #
           - os: macos-latest
             target: x86_64-apple-darwin
@@ -57,25 +51,6 @@ jobs:
       # 3️⃣  添加目标三元组
       - name: Add target
         run: rustup target add ${{ matrix.target }}
-
-      # 4️⃣  Linux i686：安装 32 位 OpenSSL
-      - name: Install 32-bit OpenSSL
-        if: matrix.target == 'i686-unknown-linux-gnu'
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib pkg-config libssl-dev:i386
-
-      # 5️⃣  Windows i686：下载 ONNX Runtime x86 并设置环境
-      - name: Fetch ONNX Runtime Win32
-        if: matrix.target == 'i686-pc-windows-msvc'
-        shell: pwsh
-        run: |
-          $url = "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x86-1.22.0.zip"
-          Invoke-WebRequest -Uri $url -OutFile ort32.zip
-          Expand-Archive ort32.zip -DestinationPath ort32
-          echo "ORT_LIB_LOCATION=$Env:GITHUB_WORKSPACE\ort32\onnxruntime-win-x86-1.22.0\lib" >> $Env:GITHUB_ENV
-          echo "PATH=$Env:GITHUB_WORKSPACE\ort32\onnxruntime-win-x86-1.22.0\bin;$Env:PATH" >> $Env:GITHUB_ENV
 
       # 6️⃣  构建
       - name: Cargo build (all)
