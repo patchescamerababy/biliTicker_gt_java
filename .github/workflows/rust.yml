@@ -80,8 +80,7 @@ jobs:
       # 6️⃣  构建
       - name: Cargo build (all)
         run: |
-          cargo build --release --target ${{ matrix.target }} \
-            --no-default-features --features noml
+          cargo build --release --target ${{ matrix.target }}
 
       # 7️⃣  打包产物
       - name: Package
