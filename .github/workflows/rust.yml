@@ -1,88 +1,112 @@
-name: Rust
+# .github/workflows/ci.yml
+name: CI / Build & Release JNI
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: [ "main" ]
+    tags:     [ "v*.*.*" ]
 
 jobs:
   build:
-    name: Build (artifact upload)
+    name: Build (${{ matrix.artifact_name }})
     runs-on: ${{ matrix.os }}
+
     strategy:
+      fail-fast: false
       matrix:
         include:
-          # Windows (MSVC)
+          # —— Windows —— #
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            name: windows-x86_64
-          - os: windows-latest
+            artifact_name: windows-x86_64
+          - os: windows-latest          # Win32（需额外 ORT）
             target: i686-pc-windows-msvc
-            name: windows-i686
+            artifact_name: windows-i686
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            name: windows-aarch64
-          # Linux (GNU)
+            artifact_name: windows-aarch64
+          # —— Linux —— #
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            name: linux-x86_64
-          # macOS
+            artifact_name: linux-x86_64
+          - os: ubuntu-latest          # 32-bit，需 32-bit OpenSSL
+            target: i686-unknown-linux-gnu
+            artifact_name: linux-i686
+          # —— macOS —— #
           - os: macos-latest
             target: x86_64-apple-darwin
-            name: macos-x86_64
+            artifact_name: macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
-            name: macos-aarch64
+            artifact_name: macos-aarch64
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # 1️⃣  取仓库
+      - uses: actions/checkout@v3
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      # 2️⃣  安装 Rust（也可用 runner 自带 rustup）
+      - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           override: true
 
-      - name: Add target ${{ matrix.target }}
+      # 3️⃣  添加目标三元组
+      - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install system deps (Linux 32-bit)
-        if: matrix.os == 'ubuntu-latest' && matrix.target == 'i686-unknown-linux-gnu'
+      # 4️⃣  Linux i686：安装 32 位 OpenSSL
+      - name: Install 32-bit OpenSSL
+        if: matrix.target == 'i686-unknown-linux-gnu'
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install -y gcc-multilib
+          sudo apt-get install -y gcc-multilib pkg-config libssl-dev:i386
 
-      - name: Build JNI library
-        run: cargo build --release --target ${{ matrix.target }}
+      # 5️⃣  Windows i686：下载 ONNX Runtime x86 并设置环境
+      - name: Fetch ONNX Runtime Win32
+        if: matrix.target == 'i686-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x86-1.22.0.zip"
+          Invoke-WebRequest -Uri $url -OutFile ort32.zip
+          Expand-Archive ort32.zip -DestinationPath ort32
+          echo "ORT_LIB_LOCATION=$Env:GITHUB_WORKSPACE\ort32\onnxruntime-win-x86-1.22.0\lib" >> $Env:GITHUB_ENV
+          echo "PATH=$Env:GITHUB_WORKSPACE\ort32\onnxruntime-win-x86-1.22.0\bin;$Env:PATH" >> $Env:GITHUB_ENV
 
-      - name: Package artifact
+      # 6️⃣  构建
+      - name: Cargo build (all)
+        run: |
+          cargo build --release --target ${{ matrix.target }} \
+            --no-default-features --features noml
+
+      # 7️⃣  打包产物
+      - name: Package
+        shell: bash
         run: |
           mkdir -p dist
-          # 把编译产物（.dll/.so/.dylib）打包到 ZIP
-          zip -j dist/jni-${{ matrix.name }}.zip \
-            target/${{ matrix.target }}/release/*.dll \
-            target/${{ matrix.target }}/release/*.so \
-            target/${{ matrix.target }}/release/*.dylib || true
+          zip -j "dist/jni-${{ matrix.artifact_name }}.zip" \
+              target/${{ matrix.target }}/release/*.dll \
+              target/${{ matrix.target }}/release/*.so \
+              target/${{ matrix.target }}/release/*.dylib \
+              target/${{ matrix.target }}/release/*.lib 2>/dev/null || true
 
-      - name: Upload build artifact
+      # 8️⃣  主分支：上传调试 Artifact
+      - name: Upload artifact (main)
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: jni-${{ matrix.name }}
-          path: dist/jni-${{ matrix.name }}.zip
+          name: jni-${{ matrix.artifact_name }}
+          path: dist/jni-${{ matrix.artifact_name }}.zip
+          retention-days: 90
 
-      - name: Create GitHub Release & upload asset
+      # 9️⃣  打 Tag：发布 Release 并上传资产
+      - name: Publish Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: dist/jni-${{ matrix.name }}.zip
+          files: dist/jni-${{ matrix.artifact_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
