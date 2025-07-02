@@ -1,3 +1,5 @@
+#![cfg(feature = "py")]
+
 use crate::abstraction::{Api, GenerateW, Test, VerifyType};
 use crate::click::Click;
 use crate::error::Error;
