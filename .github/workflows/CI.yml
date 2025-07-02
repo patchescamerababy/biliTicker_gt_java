@@ -1,14 +1,10 @@
 # .github/workflows/ci.yml
 name: CI / Build & Release JNI
 
-# 在主分支有推送时构建并上传 Artifact；
-# 在打 Tag (如 v1.2.3) 时触发 Release 并上传各平台二进制包
 on:
   push:
-    branches: [ main ]
-  push:
-    tags: [ 'v*.*.*' ]
-
+    branches: ["main"]
+    paths: ["src/**", ".github/workflows/CI.yml"]
 jobs:
   build:
     name: Build (artifact upload)
