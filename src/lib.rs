@@ -2,6 +2,8 @@
 mod abstraction;
 mod click;
 mod error;
+mod jni;
+#[cfg(feature = "py")]
 mod py;
 mod slide;
 mod w;
