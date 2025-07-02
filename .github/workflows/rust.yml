@@ -1,10 +1,13 @@
-# .github/workflows/ci.yml
-name: CI / Build & Release JNI
+name: Rust
 
 on:
   push:
-    branches: [ "main" ]
-    tags:     [ "v*.*.*" ]
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
